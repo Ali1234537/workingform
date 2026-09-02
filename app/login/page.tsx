@@ -1,131 +1,131 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-
-import {KeyRound} from 'lucide-react';
-
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
-
+import {Loader} from 'lucide-react';
 import {
   loginFailed,
   loginStart,
   loginSuccess,
 } from "@/redux/slices/authSlice";
 
-import type { StoredUser } from "@/types/auth";
 
 export default function LoginPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
 
-  const loading = useAppSelector(
-    (state) => state.auth.loading
-  );
-
-  const error = useAppSelector(
-    (state) => state.auth.error
-  );
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  
-  const handleSubmit = (
-    event: FormEvent<HTMLFormElement>
-  ) => {
+
+  const [error, setError] = useState("");
+  const[loading , setIsLoading] = useState(false);
+
+  async function handleLogin(
+    event: React.FormEvent
+  ) {
     event.preventDefault();
 
+    setError("");
+    setIsLoading(true);
     dispatch(loginStart());
 
-    const savedUsers = localStorage.getItem("users");
-
-    const users: StoredUser[] = savedUsers
-      ? JSON.parse(savedUsers)
-      : [];
-
-    const user = users.find(
-      (item) =>
-        item.email === email &&
-        item.password === password
-    );
-
-    if (!user) {
-      dispatch(
-        loginFailed("Invalid email or password.")
+    try {
+      const response = await fetch(
+        "/api/auth/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            password,
+          }),
+        }
       );
-      return;
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        dispatch(loginFailed(data.message));
+        setError(data.message);
+        setIsLoading(false);
+        return;
+      }
+
+      dispatch(loginSuccess(data.user));
+
+      router.push("/dashboard");
+    } catch {
+      setError("Something went wrong.");
+      dispatch(
+        loginFailed("Something went wrong.")
+      );
+      setIsLoading(false);
     }
-
-    dispatch(loginSuccess(user));
-
-    router.push("/dashboard");
-  };
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center">
-      <div className="w-full max-w-md rounded-lg border p-6">
-        <h1 className="mb-6 text-2xl font-bold">
+      <form
+        onSubmit={handleLogin}
+        className="w-96 space-y-4 rounded border p-8"
+      >
+        <h1 className="text-2xl font-bold">
           Login
         </h1>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block">
-              Email
-            </label>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) =>
+            setEmail(e.target.value)
+          }
+          className="w-full rounded border p-2  "
+        />
 
-            <input
-              type="email"
-              value={email}
-              onChange={(event) =>
-                setEmail(event.target.value)
-              }
-              className="w-full rounded border p-2"
-            />
-          </div>
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) =>
+            setPassword(e.target.value)
+          }
+          className="w-full rounded border p-2  "
+        />
 
-          <div>
-            <label className="mb-1 block">
-              Password
-            </label>
+        {error && (
+          <p className="text-red-500">
+            {error}
+          </p>
+        )}
 
-            <input
-              type="password"
-              value={password}
-              onChange={(event) =>
-                setPassword(event.target.value)
-              }
-              className="w-full rounded border p-2"
-            />
-          </div>
+        <button
+          type="submit"
+          disabled = {loading}
+          className="flex w-full items-center justify-center gap-2 rounded bg-black p-2 text-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
+        >
 
-          {error && (
-            <p className="text-sm text-red-500">
-              {error}
-            </p>
-          )}
+        {loading ? (
+          <>
+          <Loader className="h-5 w-5 animate-spin"/>
+          Logging in...
+          </>
+        ):(
+          "Login"
+        )}
+        </button>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white cursor-pointer transition-all hover:bg-zinc-800 active:scale-[0.98] disabled:opacity-50 sm:py-3 sm:text-[15px]"
-          >
-            <KeyRound  size = {18}/>
-            {loading ? "Logging in..." : "Login"}
-          </button>
-        </form>
-
-        <p className="mt-4 text-sm">
-          Don't have an account? 
-          <Link
-            href="/register"
-            className="underline cursor-pointer"
-          >
-            Register
-          </Link>
-        </p>
-      </div>
+        <button
+          type="button"
+          onClick={() => router.push("/register")}
+          className="w-full text-sm underline cursor-pointer"
+        >
+          Don't have an account? <strong> Register  </strong>
+         </button>
+      </form>
     </main>
   );
 }
