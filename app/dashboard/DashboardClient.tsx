@@ -1,10 +1,13 @@
+ 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import {ArrowLeft} from "lucide-react";
-
+import {
+  ArrowLeft,
+  Loader,
+} from "lucide-react";
 
 import {
   useAppDispatch,
@@ -16,91 +19,180 @@ import {
   logout,
 } from "@/redux/slices/authSlice";
 
-import type { User } from "@/types/auth";
-
-export default function DashboardClient({
-  user,
-}: {
-  user: User;
-}) {
+export default function DashboardClient() {
   const router = useRouter();
   const dispatch = useAppDispatch();
 
-  const User = useAppSelector(
+  const user = useAppSelector(
     (state) => state.auth.user
   );
 
-  const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
 
   const [message, setMessage] = useState("");
+  const [detail, setDetail] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
 
-  async function updateProfile() {
-    const response = await fetch(
-      "/api/auth/profile",
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          email,
-        }),
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  const [isLoading , setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function getUser() {
+      try {
+        const response = await fetch(
+          "/api/auth/indiv"
+        );
+
+        if (!response.ok) {
+          router.push("/login");
+          return;
+        }
+
+        const data = await response.json();
+
+        dispatch(loginSuccess(data.user));
+
+        setName(data.user.name);
+        setEmail(data.user.email);
+        setIsLoading(false);
+
+      } catch (error) {
+        router.push("/login");
       }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      setMessage(data.message);
-      return;
     }
 
-    dispatch(loginSuccess(data.user));
+    getUser();
+  }, [dispatch, router]);
 
-    const msg = "Profile Updated successfully!";
-    setMessage(msg);
-    alert(msg);
+  useEffect(() => {
+    if (user) {
+      setName(user.name);
+      setEmail(user.email);
+    }
+  }, [user]);
+
+  async function updateProfile() {
+    setIsUpdating(true);
+
+    try {
+      const response = await fetch(
+        "/api/auth/profile",
+        {
+          method: "PATCH",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            name,
+            email,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setMessage(data.message);
+        router.push("/login");
+        setIsLoading(false);
+        return;
+      }
+
+      dispatch(loginSuccess(data.user));
+
+      const msg =
+        "Profile Updated successfully!";
+
+      //const details = `After Updation  Name is "${name}"  and Email is "${email}" `;
+
+      setMessage(msg);
+      setIsSuccess(true);
+
+      setTimeout(() => {
+        setIsSuccess(false);
+        setMessage("");
+      }, 3000);
+
+      //setMessage(details);
+
+      //alert(msg);
+
+    } catch (error) {
+      router.push("/login");
+      setIsLoading(false);
+      setMessage(
+        "Something went wrong. Please try again."
+      );
+
+    } finally {
+      setIsUpdating(false);
+    }
   }
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", {
-      method: "POST",
-    });
+    setIsLoggingOut(true);
 
-    dispatch(logout());
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      });
 
-    router.push("/login");
+      dispatch(logout());
+
+      router.push("/login");
+
+    } catch (error) {
+      console.error(
+        "Logout failed:",
+        error
+      );
+
+      setIsLoggingOut(false);
+    }
+  }
+
+  if(isLoading){
+    return(
+      <div className = "flex min-h-screen items-center justify-center gap-4">
+        <Loader className="h-9 w-9 animate-spin"/>
+        <p className="text-xl font-semibold">
+        Loading ...
+        </p>
+      </div>
+    );
   }
 
   return (
+
     <main className="min-h-screen">
 
-      
       <nav className="flex items-center justify-between border-b px-8 py-4">
 
-        <h1 className="text-xl font-bold">
-          Dashboard
+        <h1 className="text-xl font-bold cursor-pointer">
+          DASHBOARD
         </h1>
 
-         
         <div className="relative">
 
           <button
             onClick={() =>
               setShowMenu(!showMenu)
             }
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-sm font-bold text-white cursor-pointer"
+            className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-red-500 text-sm font-bold text-white cursor-pointer"
           >
-            {(User?.name || user.name)
-              .charAt(0)
+            {user?.name
+              ?.charAt(0)
               .toUpperCase()}
           </button>
 
-           
           {showMenu && (
             <div className="absolute right-0 mt-2 w-44 rounded border bg-white shadow-md">
 
@@ -116,9 +208,16 @@ export default function DashboardClient({
 
               <button
                 onClick={handleLogout}
-                className="block w-full px-4 py-3 text-left cursor-pointer hover:bg-gray-100"
+                disabled={isLoggingOut}
+                className="flex w-full items-center gap-2 px-4 py-3 text-left cursor-pointer hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Logout
+                {isLoggingOut && (
+                  <Loader className="h-4 w-4 animate-spin" />
+                )}
+
+                {isLoggingOut
+                  ? "Logging Out..."
+                  : "Logout"}
               </button>
 
             </div>
@@ -128,17 +227,14 @@ export default function DashboardClient({
 
       </nav>
 
-       
       <div className="flex items-center justify-center p-8">
 
-        <div className="w-full max-w-lg rounded border p-8">
+        <div className="w-full max-w-lg rounded border-2 border-white p-2">
 
           <h2 className="mb-4 text-2xl font-bold">
-            Welcome,{" "}
-            {User?.name || user.name}!
+            Welcome, {user?.name || "User"}!
           </h2>
 
-           
           {showProfile && (
             <div className="space-y-4">
 
@@ -153,6 +249,7 @@ export default function DashboardClient({
                 }
                 className="w-full rounded border p-2"
                 placeholder="Name"
+                disabled={isUpdating}
               />
 
               <input
@@ -162,29 +259,49 @@ export default function DashboardClient({
                 }
                 className="w-full rounded border p-2"
                 placeholder="Email"
+                disabled={isUpdating}
               />
 
               {message && (
-                <p>{message}</p>
+                <div
+                  className={`rounded-lg p-3 ${
+                    isSuccess
+                      ? "bg-green-500 text-black"
+                      : ""
+                  }`}
+                >
+                  <strong>{message}</strong>
+
+                  <p>{detail}</p>
+                </div>
               )}
 
               <button
                 onClick={updateProfile}
-                className="rounded bg-black px-5 py-2 text-white cursor-pointer"
+                disabled={isUpdating}
+                className="flex min-w-[170px] items-center justify-center gap-2 rounded bg-black px-5 py-2 text-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Update Profile
+                {isUpdating && (
+                  <Loader className="h-4 w-4 animate-spin" />
+                )}
+
+                {isUpdating
+                  ? "Updating Profile..."
+                  : "Update Profile"}
               </button>
-              
 
               <button
-                onClick={() => setShowProfile(false)}
-                className="flex items-center gap-2 rounded border px-4 py-2 cursor-pointer"
-                >
-               <ArrowLeft className="h-4 w-4" />
-                 Back
-               </button>
-              
-            
+                onClick={() =>
+                  setShowProfile(false)
+                }
+                disabled={isUpdating}
+                className="flex items-center gap-2 rounded border px-4 py-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <ArrowLeft className="h-4 w-4" />
+
+                Back
+              </button>
+
             </div>
           )}
 
@@ -193,5 +310,7 @@ export default function DashboardClient({
       </div>
 
     </main>
+
   );
 }
+ 
