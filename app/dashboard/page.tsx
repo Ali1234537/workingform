@@ -13,5 +13,5 @@ export default async function DashboardPage() {
     notFound();
   }
 
-  return <DashboardClient user={user} />;
+  return <DashboardClient/>;
 }
